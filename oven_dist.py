@@ -1,4 +1,4 @@
-from scipy import constants as cst, integrate
+from scipy import constants as cst, integrate as intg
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -18,11 +18,12 @@ def maxwell_boltzmann_3d(x, a=1.0):
 def natural_linewidth(x, gam=1.0):
     return gam/(2*np.pi) / (x**2 + (gam/2)**2)
 
-def excited_population(x, sat=1, gam=1.0):
+def excited_population(x, sat=1.0, gam=1.0):
     return sat/2 / (1 + sat + (2*x/gam)**2)
 
 def P_v(v, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
-        tau=TAU, num_theta=2**8+1, num_v=2**8+1, v_max=V_MAX):
+        tau=TAU, num_theta=2**8+1, num_v=2**8+1, v_max=V_MAX,
+        integration_method='romb'):
     """
     v: speed
     theta_L: angle between laser beam (k-vector) and the center of the atom beam
@@ -45,27 +46,35 @@ def P_v(v, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
     dth = thpr[0,0,0,1] - thpr[0,0,0,0]
     dv = vpr[0,0,1,0] - vpr[0,0,0,0]
     integration_array = vpr**2 * np.abs(np.sin(thpr)) * maxwell_boltzmann_3d(vpr, vp) * natural_linewidth(v*alphainv(th) - vpr*alphainv(thpr), gam)
-    integration_array = integrate.romb(integration_array, dx=dth, axis=-1) # along theta
-    integration_array = integrate.romb(integration_array, dx=dv, axis=-1) # along v
+    integrate = intg.romb
+    if integration_method == 'trapezoid':
+        integrate = intg.trapezoid
+    elif integration_method == 'simpson':
+        integrate = intg.simpson
+    integration_array = integrate(integration_array, dx=dth, axis=-1) # along theta
+    integration_array = integrate(integration_array, dx=dv, axis=-1) # along v
     return integration_array
 
 def signal_v(v, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
-             tau=TAU, num_theta=2**8+1, num_v=2**8+1, v_max=V_MAX):
+             sat=1.0, tau=TAU, num_theta=2**8+1, num_v=2**8+1, v_max=V_MAX,
+             integration_method='romb'):
 
     alphainv = get_alphainv(th, om0, theta_L)
-    P = P_v(v, th, vp, theta_L, om0, tau, num_theta, num_v, v_max)
+    P = P_v(v, th, vp, theta_L, om0, tau, num_theta,
+            num_v, v_max, integration_method)
     v = v.reshape((v.size, 1))
-    N = excited_population(v*alphainv, gam=1/tau)
+    N = excited_population(v*alphainv, sat=sat, gam=1/tau)
 
     return N*P
 
 def signal_f(f, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
-             tau=TAU, num_theta=2**8+1, num_v=2**8+1, v_max=V_MAX):
+             sat=1.0, tau=TAU, num_theta=2**8+1, num_v=2**8+1, v_max=V_MAX,
+             integration_method='romb'):
     f = f.reshape((f.size, 1))
     th = th.reshape((1, th.size))
     alpha = get_alpha(th, om0, theta_L)
     v = alpha * (2*np.pi*f - om0)
-    return signal_v(v, th, vp, theta_L, om0, tau, num_theta, num_v, v_max)
+    return signal_v(v, th, vp, theta_L, om0, sat, tau, num_theta, num_v, v_max)
 
 if __name__ == '__main__':
     ref_V = [-1.2, 0.5]
@@ -82,7 +91,7 @@ if __name__ == '__main__':
     #f = np.linspace(f_ct[0], f_ct[-1], num=300)
     th = np.array([0])
     vp = 500
-    P = signal_f(f, th, vp=vp)
+    P = signal_f(f, th, vp=vp, integration_method='trapezoid')
     P = P.flatten()/P.max()
 
     fig, ax = plt.subplots(1,2)
