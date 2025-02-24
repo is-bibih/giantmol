@@ -11,6 +11,10 @@ V_P = np.sqrt(2*cst.Boltzmann*(318+273)/CA40_MASS)
 
 get_alpha = lambda th, om0=PEAK_FREQ*2*np.pi, theta_L=0: - cst.c/(om0*np.cos(th - theta_L))
 get_alphainv = lambda th, om0=PEAK_FREQ*2*np.pi, theta_L=0: - om0*np.cos(th - theta_L)/cst.c
+temp2vel = lambda T, m=CA40_MASS: np.sqrt(2*cst.Boltzmann*T/m)
+vel2temp = lambda v, m=CA40_MASS: m*v**2 / (2*cst.Boltzmann)
+freq2om = lambda f: 2*np.pi*f
+om2freq = lambda om: 0.5*om/np.pi
 
 def maxwell_boltzmann_3d(x, a=1.0):
     return 1/(a**3 * np.pi**(1.5)) * np.exp(-(x/a)**2)
@@ -67,7 +71,7 @@ def signal_v(v, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
 
     return N*P
 
-def signal_f(f, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
+def signal_f(f, th, vp=V_P, theta_L=0.0, om0=2*np.pi*PEAK_FREQ,
              sat=1.0, tau=TAU, num_theta=2**8+1, num_v=2**8+1, v_max=V_MAX,
              integration_method='romb'):
     f = f.reshape((f.size, 1))
@@ -79,14 +83,14 @@ def signal_f(f, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
 if __name__ == '__main__':
     ref_V = [-1.2, 0.5]
     ref_f = [709.07714e12, 709.07902e12]
-    data_dir = '../data/20250219_Ca-neutral_TrapAxis'
+    data_dir = '../../odrive/ep2/internship/data/20250219_Ca-neutral_TrapAxis'
     V, f, ct = read_preprocess(data_dir, ref_V, ref_f, 0)
     idx = 0
     f_ct = f[idx]
     ct = ct[idx]
 
     #v = np.linspace(0, V_P*1.5, num=300)
-    freq_delta = 3e-7
+    freq_delta = 2e-7
     f = np.linspace(PEAK_FREQ*(1-freq_delta), PEAK_FREQ*(1+freq_delta), num=300)
     #f = np.linspace(f_ct[0], f_ct[-1], num=300)
     th = np.array([0])
@@ -94,10 +98,26 @@ if __name__ == '__main__':
     P = signal_f(f, th, vp=vp, integration_method='trapezoid')
     P = P.flatten()/P.max()
 
-    fig, ax = plt.subplots(1,2)
-    ax[0].plot((f-PEAK_FREQ)*1e-9, P)
-    ax[1].plot((f_ct-PEAK_FREQ)*1e-9, ct)
-    ax[0].set_xlabel('f-f0 [GHz]')
-    ax[1].set_xlabel('f-f0 [GHz]')
+    # plot for different angles
+    vp = temp2vel(300+273)
+    num = 20 
+    angles = np.linspace(0, np.pi*2, num=num)
+    colors = plt.cm.jet(np.linspace(0, 1, num=num))
+    f = np.linspace(PEAK_FREQ*(1-freq_delta), PEAK_FREQ*(1+freq_delta), num=201)
+    Ps = [signal_f(f, th, vp=vp, theta_L=ang, integration_method='trapezoid') for ang in angles]
+    Ps = [P / P.max() for P in Ps]
+    fig, ax = plt.subplots(1,1)
+    for i in range(num):
+        ax.plot(f, Ps[i], color=colors[i], label=f'{np.rad2deg(angles[i])}')
+    fig.legend()
     plt.show()
+
+    if False:
+        fig, ax = plt.subplots(1,2)
+        ax[0].plot((f-PEAK_FREQ)*1e-9, P)
+        ax[1].plot((f_ct-PEAK_FREQ)*1e-9, ct)
+        ax[0].set_xlabel('f-f0 [GHz]')
+        ax[1].set_xlabel('f-f0 [GHz]')
+        plt.show()
+
 
