@@ -11,8 +11,11 @@ V_P = np.sqrt(2*cst.Boltzmann*(318+273)/CA40_MASS)
 def maxwell_boltzmann_3d(x, a=1.0):
     return 1/(a**3 * np.pi**(1.5)) * np.exp(-(x/a)**2)
 
-def natural_linewidth(x, gam=1.0):
-    return gam/(2*np.pi) / (x**2 + (gam/2)**2)
+def maxwell_boltzmann_1d(x, a=1.0):
+    return 1/(a * np.sqrt(np.pi)) * np.exp(-(x/a)**2)
+
+def natural_linewidth(x, gam=1.0, P0=1.0):
+    return P0 * gam/(2*np.pi) / (x**2 + (gam/2)**2)
 
 def excited_population(x, sat=1.0, gam=1.0):
     return sat/2 / (1 + sat + (2*x/gam)**2)
@@ -56,6 +59,18 @@ def P_v(v, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
         integration_array = vpr**2 * maxwell_boltzmann_3d(vpr, vp) * natural_linewidth(v*alphainv(th) - vpr*alphainv(th), gam)
         integration_array = integration_array.reshape((v.size, th.size, num_v))
     integration_array = integrate(integration_array, dx=dv, axis=-1) # along v
+    return integration_array
+
+def gas_dist1d(v, th=0.0, vp=V_P, theta_L=0.0, om0=2*np.pi*PEAK_FREQ, tau=TAU, num_v=2**8+1, v_max=V_MAX):
+    v = v.reshape((v.size, 1))
+    alphainv = lambda th: get_alphainv(th, om0, theta_L)
+    gam = 1/tau
+
+    vpr = np.linspace(-v_max, v_max, num=num_v).reshape((1,num_v)) # v prime for integration
+    dv = vpr[0,1] - vpr[0,0]
+    integration_array = np.abs(alphainv(th)) * maxwell_boltzmann_1d(vpr, vp) * natural_linewidth(v*alphainv(th) - vpr*alphainv(th), gam)
+    integration_array = intg.trapezoid(integration_array, dx=dv, axis=-1)
+
     return integration_array
 
 def signal_v(v, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
