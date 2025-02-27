@@ -50,8 +50,11 @@ def get_FWHM(x, y):
     """
     gets FWHM from function
     """
+    peak_height = y.max()
     peak_idx = y.argmax()
-    _, _, left_pos, right_pos = sgl.peak_widths(y, [peak_idx])
-    [left_x, right_x] = np.interp([left_pos[0], right_pos[0]], np.arange(x.size), x)
-    fwhm = right_x - left_x
-    return fwhm
+    left_pos = np.argmin(np.abs(y[0:peak_idx] - 0.5*peak_height))
+    right_pos = peak_idx + np.argmin(np.abs(y[peak_idx:-1] - 0.5*peak_height))
+    left_x, right_x = x[left_pos], x[right_pos]
+    fwhm = np.abs(right_x - left_x)
+    return fwhm, (left_x, right_x)
+
