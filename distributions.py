@@ -8,11 +8,11 @@ from utilities import get_alpha, get_alphainv, temp2vel, vel2temp, freq2om, om2f
 V_MAX = np.sqrt(2*cst.Boltzmann*1e3/CA40_MASS)
 V_P = np.sqrt(2*cst.Boltzmann*(318+273)/CA40_MASS)
 
-def maxwell_boltzmann_3d(x, a=1.0):
-    return 1/(a**3 * np.pi**(1.5)) * np.exp(-(x/a)**2)
-
 def maxwell_boltzmann_1d(x, a=1.0):
     return 1/(a * np.sqrt(np.pi)) * np.exp(-(x/a)**2)
+
+def maxwell_boltzmann_3d(x, a=1.0):
+    return x**2 /(a**3 * np.sqrt(np.pi)) * np.exp(-(x/a)**2) # × v²dv, from ramsey
 
 def natural_linewidth(x, gam=1.0, P0=1.0):
     return P0 * gam/(2*np.pi) / (x**2 + (gam/2)**2)
@@ -61,14 +61,31 @@ def P_v(v, th, vp=V_P, theta_L=0, om0=2*np.pi*PEAK_FREQ,
     integration_array = integrate(integration_array, dx=dv, axis=-1) # along v
     return integration_array
 
-def gas_dist1d(v, th=0.0, vp=V_P, theta_L=0.0, om0=2*np.pi*PEAK_FREQ, tau=TAU, num_v=2**8+1, v_max=V_MAX):
+def gas_dist1d(om, th=0.0, vp=V_P, theta_L=0.0, om0=2*np.pi*PEAK_FREQ, tau=TAU, num_om=2**8+1, om_max=None):
+    om = om.reshape((om.size, 1))
+    k = om0/cst.speed_of_light
+    om_max = vp*k * 5
+    gam = 1/tau
+
+    # the integral is from 0 to (om_max-om0)
+    # ompr is the integration variable
+    # ompr_mb is centered around 0 so that the maxwell-boltzmann distribution is different from 0 in the integration domain
+    ompr_mb = np.linspace(-om_max, om_max, num=num_om).reshape((1, num_om)) # (ω₀-ω') for integration
+    ompr = om0 - ompr_mb # ω' for integration
+    dom = np.abs(ompr[0,1] - ompr[0,0])
+    integration_array = (1/k) * maxwell_boltzmann_1d(ompr_mb/k, vp) * natural_linewidth(om - ompr, gam)
+    integration_array = intg.trapezoid(integration_array, dx=dom, axis=-1)
+
+    return integration_array
+
+def gas_dist3d(v, th=0.0, vp=V_P, theta_L=0.0, om0=2*np.pi*PEAK_FREQ, tau=TAU, num_v=2**8+1, v_max=V_MAX):
     v = v.reshape((v.size, 1))
     alphainv = lambda th: get_alphainv(th, om0, theta_L)
     gam = 1/tau
 
     vpr = np.linspace(-v_max, v_max, num=num_v).reshape((1,num_v)) # v prime for integration
     dv = vpr[0,1] - vpr[0,0]
-    integration_array = np.abs(alphainv(th)) * maxwell_boltzmann_1d(vpr, vp) * natural_linewidth(v*alphainv(th) - vpr*alphainv(th), gam)
+    integration_array = np.abs(alphainv(th)) * maxwell_boltzmann_3d(vpr, vp) * natural_linewidth(v*alphainv(th) - vpr*alphainv(th), gam)
     integration_array = intg.trapezoid(integration_array, dx=dv, axis=-1)
 
     return integration_array
