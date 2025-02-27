@@ -45,3 +45,13 @@ def read_preprocess(data_dir, ref_V, ref_f, threshold=0.0):
             ct[i], f[i], V[i] = remove_small(ct[i], threshold, f[i], V[i]) 
     return V, f, ct
 
+
+def get_FWHM(x, y):
+    """
+    gets FWHM from function
+    """
+    peak_idx = y.argmax()
+    _, _, left_pos, right_pos = sgl.peak_widths(y, [peak_idx])
+    [left_x, right_x] = np.interp([left_pos[0], right_pos[0]], np.arange(x.size), x)
+    fwhm = right_x - left_x
+    return fwhm
