@@ -41,7 +41,7 @@ def voigt1d(om, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, num_om=2**8+1, 
 
     return integration_array
 
-def voigt3d_common(vel_dist, om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, num_om=2**8+1, om_max=None):
+def voigt3d_common(vel_dist, om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, num_om=2**8+1, om_max=None, **kwargs):
     om = np.reshape(om, (np.size(om), 1))
     theta = np.reshape(theta, (1, np.size(theta)))
     k = om0 * np.cos(theta) / cst.speed_of_light
@@ -53,19 +53,19 @@ def voigt3d_common(vel_dist, om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, 
     ompr = np.linspace(om0, om_max+om0, num=num_om).reshape((1, num_om)) # ω' for integration
     ompr_mb = ompr - om0 # (ω₀-ω') for integration on maxwell-boltzmann
     dom = np.abs(ompr[0,1] - ompr[0,0])
-    integration_array = np.abs(1/k) * vel_dist(ompr_mb/k, vp) \
+    integration_array = 2*np.pi * np.abs(1/k) * vel_dist(ompr_mb/k, vp) \
         * excited_population(om - ompr, sat, gam)
     integration_array = intg.trapezoid(integration_array, dx=dom, axis=-1)
 
     return integration_array
 
-def voigt3d_gas(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, num_om=2**8+1, om_max=None):
-    return voigt3d_common(maxwell_boltzmann_3d, om, theta, vp, om0, sat, tau, num_om, om_max)
+def voigt3d_gas(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, num_om=2**8+1, om_max=None, **kwargs):
+    return voigt3d_common(maxwell_boltzmann_3d, om, theta, vp, om0, sat, tau, num_om, om_max, **kwargs)
 
-def voigt3d_beam(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, num_om=2**8+1, om_max=None):
-    return voigt3d_common(beam, om, theta, vp, om0, sat, tau, num_om, om_max)
+def voigt3d_beam(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, num_om=2**8+1, om_max=None, **kwargs):
+    return voigt3d_common(beam, om, theta, vp, om0, sat, tau, num_om, om_max, **kwargs)
 
-def new_signal(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, theta_OL=0.0,
+def new_signal(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, theta_OL=0.0, normalize=True,
                num_om=2**8+1, om_max=None, num_theta=2**8+1, theta_min=-np.pi/2, theta_max=np.pi/2):
     """
     om: laser frequency (rad/s)
@@ -75,6 +75,7 @@ def new_signal(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, theta
     sat: saturation parameter
     tau: transition lifetime
     theta_OL: angle between laser wave-number and oven most probable velocity (rad)
+    normalize: normalize integral w.r.t. solid angle
     num_om: number of integration points along omega
     om_max: number to use as infinity
     num_theta: number of integration points along theta
@@ -94,15 +95,27 @@ def new_signal(om, theta, vp=V_P, om0=2*np.pi*PEAK_FREQ, sat=1.0, tau=TAU, theta
     theta = np.reshape(theta, (1, np.size(theta), 1, 1))
 
     # integration variables
-    ompr = np.linspace(om0, om_max+om0, num=num_om).reshape((1, 1, num_om, 1)) # ω'
-    thetapr = np.linspace(theta_min, theta_max, num=num_theta).reshape((1, 1, 1, num_theta)) # θ'
-    k_proj = k * np.cos(thetav2thetal(thetapr)) # projection of k along v
-    dom = ompr[0,0,0,1] - ompr[0,0,0,0]
-    dth = thetapr[0,0,1,0] - thetapr[0,0,0,0]
+    #   ω'
+    ompr = np.linspace(om0, om_max+om0, num=num_om).reshape((1, 1, num_om, 1))
+    #   θ' (velocity coordinate)
+    thetapr = np.linspace(theta_min, theta_max, num=num_theta).reshape((1, 1, 1, num_theta)) 
+    dom = np.abs(ompr[0,0,1,0] - ompr[0,0,0,0])
+    dth = np.abs(thetapr[0,0,0,1] - thetapr[0,0,0,0])
 
-    integration_array = np.pi * np.sin(2*thetapr) / k_proj \
+    # k · v / |v|
+    k_proj = - k * np.cos(thetav2thetal(thetapr))
+
+    norm = 1
+    if not normalize or (theta_max == np.pi/2 and theta_min == -np.pi/2):
+        pass
+    elif theta_max * theta_min <= 0:
+        norm = 2/(1 - 0.5*(np.cos(2*theta_max) + np.cos(2*theta_min)))
+    else:
+        norm = 4/np.abs(np.cos(2*theta_max) - np.cos(2*theta_min))
+
+    integration_array =  norm * np.pi * np.abs(np.sin(2*thetapr) / k_proj ) \
         * excited_population(om * np.cos(theta) - ompr, sat=sat, gam=gam) \
-        * maxwell_boltzmann_3d((om0 - ompr)/(k * np.cos(thetapr)), a=vp)
+        * maxwell_boltzmann_3d((om0 - ompr)/k_proj, a=vp)
     integration_array = intg.trapezoid(integration_array, dx=dom, axis=2) # integrate along ω'
     integration_array = intg.trapezoid(integration_array, dx=dth, axis=-1) # integrate along θ'
     return integration_array
