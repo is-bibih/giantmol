@@ -1,5 +1,5 @@
-from math import nan
-from os import error, listdir, path
+import re
+from os import listdir, path
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,16 +14,37 @@ vel2temp = lambda v, m=CA40_MASS: m*v**2 / (2*cst.Boltzmann)
 freq2om = lambda f: 2*np.pi*f
 om2freq = lambda om: 0.5*om/np.pi
 
-def read_data(data_dir, ref_V, ref_f):
-    fnames = [f for f in listdir(data_dir) if path.isfile(path.join(data_dir, f))]
+TIME_STEP_FILENAME = 'timestep.txt'
+VOLTAGE_FREQUENCY_FILENAME = 'voltage_frequency.dat'
+
+def read_data(data_dir):
+    fnames = [f for f in listdir(data_dir) \
+              if path.isfile(path.join(data_dir, f)) \
+              and not (f == TIME_STEP_FILENAME or f == VOLTAGE_FREQUENCY_FILENAME)]
+    volt_freq = np.loadtxt(path.join(data_dir, VOLTAGE_FREQUENCY_FILENAME))
+    timestep = np.loadtxt(path.join(data_dir, TIME_STEP_FILENAME))
+
     data = [np.loadtxt(path.join(data_dir, fname)) for fname in fnames]
+
+    ref_V = volt_freq[:,0]
+    ref_f = volt_freq[:,1]
+
     get_freq = lambda V: (ref_f[1] - ref_f[0]) / (ref_V[1] - ref_V[0]) * (V - ref_V[0]) + ref_f[0]
 
     voltages = [d[:,4] for d in data] 
-    counts = [d[:,1] for d in data] 
+    counts = [d[:,1] / timestep for d in data] 
     freqs = [np.array(get_freq(V)) for V in voltages]
+    temps = [float(f'{m.group(1)}.{m.group(2)}') for t in fnames \
+             if (m := re.match(r"(\d+)-(\d)C", t))]
 
-    return voltages, freqs, counts
+    return {
+        'voltages': voltages, 
+        'counts': counts,
+        'frequencies': freqs,
+        'timestep': timestep,
+        'temperatures': temps,
+        'filenames': fnames,
+    }
 
 def clean(ct):
     """normalize and set background to zero"""
