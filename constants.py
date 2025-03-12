@@ -6,5 +6,6 @@ GAMMA = 1/TAU
 CA40_MOLAR_MASS = 39.9625908 # g/mol https://pubchem.ncbi.nlm.nih.gov/compound/Calcium-40
 CA40_MASS = CA40_MOLAR_MASS * 1e-3 / cst.Avogadro
 PEAK_FREQ = 709.07855e12 # Hz
+TRANSITION_FREQ = 709078373.01e6 # Hz
 I_SAT = 45 # W/m²
 I_LASER = 10.73e-3 / np.pi*(5e-3)**2 # W/m² (power/detector area)

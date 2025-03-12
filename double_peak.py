@@ -1,113 +1,86 @@
-from math import nan
-from os import error, listdir, path
+from os import listdir, path
+from re import X
+
+import utilities as ut
+import constants as cst
 
 import numpy as np
+import scipy.signal as sgl
 import matplotlib.pyplot as plt
-import scipy.signal as sgl, scipy.constants as cst, scipy.optimize as opt
 
-data_dir = '../data/20250213_Ca-neutral_doublePeak'
-single_peak_dir = '../data/20250212_Ca-neutral_ImproveFluoSignal'
+data_dir = './data/20250213_Ca-neutral_double-peak'
+fnames = [f for f in listdir(data_dir) if path.isfile(path.join(data_dir, f))]
+data = [ut.read_counts_freq(path.join(data_dir, f)) for f in fnames]
+N = len(fnames)
 
-# constants
-TAU = 4.6e-9 # 423 nm transition lifetime [s]
-CA40_MOLAR_MASS = 39.9625908 # g/mol https://pubchem.ncbi.nlm.nih.gov/compound/Calcium-40
-CA40_MASS = CA40_MOLAR_MASS * 1e-3 / cst.Avogadro
-PEAK_FREQ = 709.07855e12 # Hz
+# store data in usable form
+counts = [dat[0] for dat in data]
+freqs = [dat[1] for dat in data]
+temps = ut.cel2kel(np.array([ut.fname2temp(f) for f in fnames])) # convert to kelvin
 
-# values to define voltage - freq conversion
-ref_V = [-0.1, 1.9]
-ref_f = [709.07726e12, 709.07979e12] # double peak
-ref_fs = [709.07717e12, 709.07984e12] # single peak
+# reorder by temperature
+idx = np.argsort(temps)
+counts = [counts[i] for i in idx]
+freqs = [freqs[i] for i in idx]
+temps = np.take(temps, idx)
 
-# read count data
-def read_data(data_dir, ref_V, ref_f):
-    fnames = [f for f in listdir(data_dir) if path.isfile(path.join(data_dir, f))]
-    data = [np.loadtxt(path.join(data_dir, fname)) for fname in fnames]
-    get_freq = lambda V: (ref_f[1] - ref_f[0]) / (ref_V[1] - ref_V[0]) * (V - ref_V[0]) + ref_f[0]
+# remove background (it changed a lot between readings)
+counts = [c - c.min() for c in counts]
 
-    voltages = [d[:,4] for d in data] 
-    counts = [d[:,1] for d in data] 
-    freqs = [get_freq(V) for V in voltages]
+# find center between peaks (unshifted absorbtion freq)
+valley_freqs = np.zeros((N,))
+for i in range(N):
+    c = counts[i]
+    third_length = int(len(c)/3)
+    center_idx = np.arange(third_length, third_length*2)
+    # first valley of width third_length*0.1 (the noise creates narrow spikes in the data) 
+    valley_idx = sgl.find_peaks_cwt(-c[center_idx], third_length*0.1)[0] + third_length
 
-    return voltages, freqs, counts
+    valley_freqs[i] = freqs[i][valley_idx]
 
-# get temperatures from file names
-temps = [float(fname[0:2] + '.' + fname[4]) for fname in listdir(data_dir)]
+mean_trans_freq = valley_freqs.mean()
 
-# normalize and set background to 0
-def clean(ct):
-    ct = ct - np.min(ct)
-    ct = ct/np.max(ct)
-    return ct
+# distance between peaks
 
-# find FWHM
-def get_FWHM(f, ct):
-    """
-    gets FWHM from normalized counts
-    """
-    peak_idx = ct.argmax()
-    _, _, left_pos, right_pos = sgl.peak_widths(ct, [peak_idx])
-    [left_f, right_f] = np.interp([left_pos[0], right_pos[0]], np.arange(f.size), f)
-    fwhm = right_f - left_f
-    return fwhm
+peak_distances = np.zeros((N,))
+all_peak_idx = []
+for i in range(N):
+    c = counts[i]
+    all_peak_idx.append(sgl.find_peaks_cwt(c, np.arange(1,400)))
+    all_peak_idx[i] = all_peak_idx[i][all_peak_idx[i] > 100]
+    print(all_peak_idx[i])
+    highest_idx = np.argpartition(c[all_peak_idx[i]], -2)[-2:]
+    peak_idx = all_peak_idx[i][highest_idx]
+    print('results')
+    print(peak_idx)
 
-# doppler broadening
-def displaced_mb(om, om0, theta, T, m):
-    result = np.zeros(om.size)
-    idx = om > om0
-    result[idx] = (om[idx] - om0)**2 * np.exp(-0.5*m/(cst.Boltzmann*T) * (cst.speed_of_light * (om[idx] - om0) / (om0*np.cos(theta)))**2 )
-    max_val = result.max()
-    return result / max_val if max_val != 0 else result
+# ------------------------------------------------------------------------------------------
 
-def atomic_beam(om, om0, theta, T, m):
-    result = (om)**3 * np.exp(-0.5*m/(cst.Boltzmann*T) * (cst.speed_of_light * (om - om0) / (om0*np.cos(theta)))**2 )
-    max_val = result.max()
-    return result / max_val if max_val != 0 else result
+# print transition frequency info
+Hz_scale = 1e6
+print(f'mean transition frequency: {mean_trans_freq/Hz_scale:.2f} (MHz)')
+print(f'standard deviation: {valley_freqs.std()/Hz_scale:.2f} (MHz)')
+print(f'known transition frequency: {cst.TRANSITION_FREQ/Hz_scale} (MHz)')
+print(f'relative error: {np.abs(mean_trans_freq - cst.TRANSITION_FREQ)/cst.TRANSITION_FREQ:.2e}')
+print(f'absolute error: {np.abs(mean_trans_freq - cst.TRANSITION_FREQ)/Hz_scale:.2f} (MHz)')
 
-def doppler(om, om0, theta, T, m):
-    result = np.exp(-0.5*m/(cst.Boltzmann*T) * (cst.speed_of_light * (om - om0) / (om0*np.cos(theta)))**2 )
-    max_val = result.max()
-    return result / max_val if max_val != 0 else result
+# plotting
 
-# read and clean
-V, f, ct = read_data(data_dir, ref_V, ref_f) # double peak
-clean_ct = [clean(c) for c in ct]
-Vs, fs, cts = read_data(single_peak_dir, ref_V, ref_fs) # single peak
-clean_cts = [clean(c) for c in cts]
+xaxis_scale = 1e-9
 
-# doppler fit
-#fit_f = lambda nu, nu0, theta, T, alpha, phi: atomic_beam(0.5*nu/np.pi, 0.5*nu0/np.pi, theta, T, alpha, phi, CA40_MASS)
-def fit_f(nu, nu0_dif, theta, T100):
-    """
-    nu0_dif: [GHz] such that nu0 = 709.07855 Hz + nu0_dif
-    theta: angle between atomic beam and laser beam
-    T100: [1e2 K] such that T = T100*100
-    alpha: angle subtended by oven opening 
-    phi: viewing angle w.r.t. laser beam
-    """
-    om = 0.5*nu/np.pi
-    om0 = 0.5/np.pi * (nu0_dif*1e9 + PEAK_FREQ)
-    T = T100*100
-    return atomic_beam(om, om0, theta, T, CA40_MASS)
+fig, ax = plt.subplots(1,1)
+for i in range(N):
+    ax.scatter(freqs[i] * xaxis_scale, counts[i], label=f'{temps[i]:.2f} K', marker='.')
+    #ax.plot(np.arange(len(counts[i])), counts[i], label=f'{temps[i]:.2f} K')
+for i in range(N): ax.scatter(freqs[i][all_peak_idx[i]] * xaxis_scale, counts[i][all_peak_idx[i]], marker='*', c='red', s=80)
+ax.set_xlabel('frequency (GHz)')
+ax.set_ylabel('counts / ms')
+fig.legend()
 
-fit_results = opt.curve_fit(fit_f, fs[0], clean_cts[0],
-                            p0=[0, 0, 2],
-                            bounds=([0, 0.0, 0],
-                                    [np.inf, 2*np.pi, np.inf]))
-print(fit_results)
-fit_counts = fit_f(fs[0], *fit_results[0])
-#fit_counts = fit_f(fs[0], 0, 0.1, 0.2)
+fig, ax = plt.subplots(1,1)
+ax.scatter(temps, valley_freqs * xaxis_scale)
+ax.set_xlabel('temperature (K)')
+ax.set_ylabel('valley frequency (GHz)')
 
-# compare fwhm with natural linewidth
-fwhm = get_FWHM(fs[0], clean_cts[0])
-lw = 1 / (2*np.pi * TAU)
-
-#for freq, counts in zip(f, clean_ct):
-#    plt.plot(freq, counts)
-#for freq, counts in zip(fs, clean_cts):
-#    plt.plot(freq, counts)
-#for counts in test_counts:
-#    plt.plot(fs[0], counts)
-plt.plot(fs[0], clean_cts[0])
-plt.plot(fs[0], fit_counts)
 plt.show()
+
