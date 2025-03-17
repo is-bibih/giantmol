@@ -50,10 +50,15 @@ def read_raw_data(data_dir):
         'filenames': fnames,
     }
 
-def read_counts_freq(fname):
+def read_counts_freq(fname, freq_correction=None):
     data = np.loadtxt(fname)
     freq = data[:,0]
     counts = data[:,1]
+    if freq_correction:
+        lower_bound = freq[0] + freq_correction[0]
+        upper_bound = freq[-1] + freq_correction[1]
+        slope = (upper_bound - lower_bound)/(freq[-1] - freq[0])
+        freq = slope*(freq - freq[0]) + lower_bound
     return counts, freq
 
 def clean(ct):

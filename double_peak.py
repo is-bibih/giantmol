@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 data_dir = './data/20250213_Ca-neutral_double-peak'
 fnames = [f for f in listdir(data_dir) if path.isfile(path.join(data_dir, f))]
-data = [ut.read_counts_freq(path.join(data_dir, f)) for f in fnames]
+data = [ut.read_counts_freq(path.join(data_dir, f), freq_correction=cst.FREQ_CORRECTION) for f in fnames]
 N = len(fnames)
 
 # store data in usable form
@@ -65,7 +65,6 @@ for i in range(N):
     peak_idx[i,:] = this_peak_idx
     # calculate distances
     peak_distances[i] = np.abs(freqs[i][this_peak_idx[1]] - freqs[i][this_peak_idx[0]])
-
 peak_speeds = 0.5 * peak_distances * (speed_of_light/cst.TRANSITION_FREQ)
 
 # ------------------------------------------------------------------------------------------
@@ -82,28 +81,35 @@ print(f'absolute error: {np.abs(mean_trans_freq - cst.TRANSITION_FREQ)/Hz_scale:
 
 xaxis_scale = 1e-9
 
-fig, ax = plt.subplots(1,1)
-for i in range(N):
-    ax.scatter(freqs[i] * xaxis_scale, counts[i], label=f'{temps[i]:.2f} K', marker='.')
-    #ax.plot(np.arange(len(counts[i])), counts[i], label=f'{temps[i]:.2f} K')
-for i in range(N): ax.scatter(freqs[i][peak_idx[i]] * xaxis_scale, counts[i][peak_idx[i]], marker='*', c='red', s=80)
-ax.set_xlabel('frequency (GHz)')
-ax.set_ylabel('counts / ms')
-fig.legend()
-
-fig, ax = plt.subplots(1,1)
-ax.scatter(temps, valley_freqs * xaxis_scale)
-ax.set_xlabel('oven temperature (K)')
-ax.set_ylabel('transition frequency (GHz)')
+#fig, ax = plt.subplots(1,1)
+#for i in range(N):
+#    ax.scatter(freqs[i] * xaxis_scale, counts[i], label=f'{temps[i]:.2f} K', marker='.')
+#    #ax.plot(np.arange(len(counts[i])), counts[i], label=f'{temps[i]:.2f} K')
+#for i in range(N): ax.scatter(freqs[i][peak_idx[i]] * xaxis_scale, counts[i][peak_idx[i]], marker='*', c='red', s=80)
+#ax.set_xlabel('frequency (GHz)')
+#ax.set_ylabel('counts / ms')
+#fig.legend()
 
 fig, ax = plt.subplots(1,1)
 ax.scatter(temps, peak_speeds, label='experimental data')
-ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(75)),
-        label='speed from oven temp,\n$\\theta = 75\\degree$')
-ax.plot(temps, ut.temp2vel(temps*0.2) * np.cos(np.deg2rad(75)),
-        label='speed from oven temp · 0.2,\n$\\theta = 75\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(82)),
+        label='speed from oven temp,\n$\\theta = 82\\degree$')
+#ax.plot(temps, ut.temp2vel(temps*0.65) * np.cos(np.deg2rad(82)),
+#        label='speed from oven temp · 0.65,\n$\\theta =  82\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(84.4)),
+        label='speed from oven temp,\n$\\theta =  84.4\\degree$')
+ax.plot(temps, ut.temp2vel(temps*0.5) * np.cos(np.deg2rad(82)),
+        label='speed from oven temp · 0.50,\n$\\theta =  82\\degree$')
 ax.set_xlabel('oven temperature (K)')
 ax.set_ylabel(r'$v_p$cos$(\theta_{OL})$ most probable speed (ms⁻¹)')
+ax.legend()
+
+fig, ax = plt.subplots(1,1)
+ax.scatter(temps, ut.vel2temp(peak_speeds / np.cos(np.deg2rad(82))), label='$\\theta_{OL} = 82\\degree$')
+ax.scatter(temps, ut.vel2temp(peak_speeds / np.cos(np.deg2rad(84.4))), label='$\\theta_{OL} = 84.4\\degree$')
+ax.plot(temps, temps, label='oven temperature')
+ax.set_xlabel('measured oven temperature (K)')
+ax.set_ylabel(r'calculated temperature$ (K)')
 ax.legend()
 
 plt.show()

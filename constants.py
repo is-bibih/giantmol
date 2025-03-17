@@ -9,3 +9,8 @@ PEAK_FREQ = 709.07855e12 # Hz
 TRANSITION_FREQ = 709078373.01e6 # Hz
 I_SAT = 45 # W/m²
 I_LASER = 10.73e-3 / np.pi*(5e-3)**2 # W/m² (power/detector area)
+
+# correction offsets for frequency range
+FREQ_CORRECTION_LOW = 0.18e9
+FREQ_CORRECTION_HIGH = -0.11e9
+FREQ_CORRECTION = [FREQ_CORRECTION_LOW, FREQ_CORRECTION_HIGH]
