@@ -55,7 +55,7 @@ def read_dat(fname, data_dir=data_dir):
 def compare(static_data, freq):
     fmin = freq.min()
     fmax = freq.max()
-    gain = (static_data['V_high'] - static_data['V_low']) / (fmax - fmin)
+    gain = (fmax - fmin) / (static_data['V_high'] - static_data['V_low'])
     low_dif = fmin - static_data['freq_low']
     high_dif = fmax - static_data['freq_high']
     return gain, low_dif, high_dif
@@ -84,9 +84,9 @@ if __name__ == '__main__':
         low_difs.append(low_dif)
         high_difs.append(high_dif)
 
-    print(f'gain:\t\tmean = {np.average(gains) * 1e9} V/MHz \tstdev = {np.std(gains) * 1e9} V/MHz')
-    print(f'lower gap:\tmean = {np.average(low_difs) * 1e-9} MHz \t\tstdev = {np.std(low_difs) * 1e-9} MHz')
-    print(f'upper gap:\tmean = {np.average(high_difs) * 1e-9} MHz \tstdev = {np.std(high_difs) * 1e-9} MHz')
+    print(f'gain:\t\tmean = {np.average(gains) * 1e-9} GHz/V \tstdev = {np.std(gains) * 1e-9} GHz/V')
+    print(f'lower gap:\tmean = {np.average(low_difs) * 1e-9} GHz \t\tstdev = {np.std(low_difs) * 1e-9} GHz')
+    print(f'upper gap:\tmean = {np.average(high_difs) * 1e-9} GHz \tstdev = {np.std(high_difs) * 1e-9} GHz')
 
     """
     gain:		mean = 0.9370261250701449 V/MHz, 	stdev = 0.05979943360828218 V/MHz
