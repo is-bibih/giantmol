@@ -2,8 +2,7 @@ import re
 from os import listdir, path
 
 import numpy as np
-import matplotlib.pyplot as plt
-import scipy.signal as sgl, scipy.constants as cst, scipy.optimize as opt
+import scipy.constants as cst
 
 from constants import *
 
@@ -21,6 +20,8 @@ fname2temp = lambda fname: float(f'{m.group(1)}.{m.group(2)}') \
 
 TIME_STEP_FILENAME = 'timestep.txt'
 VOLTAGE_FREQUENCY_FILENAME = 'voltage_frequency.dat'
+
+get_filelist = lambda dir: sorted([f for f in listdir(dir) if path.isfile(path.join(dir, f))])
 
 def read_raw_data(data_dir):
     fnames = [f for f in listdir(data_dir) \
@@ -52,6 +53,8 @@ def read_raw_data(data_dir):
 
 def read_counts_freq(fname, freq_correction=None):
     data = np.loadtxt(fname)
+    if len(data.shape) == 1: # some files are saved with all data in the same column :(
+        data = data.reshape((-1,2))
     freq = data[:,0]
     counts = data[:,1]
     if freq_correction:
@@ -93,4 +96,17 @@ def get_FWHM(x, y):
     left_x, right_x = x[left_pos], x[right_pos]
     fwhm = np.abs(right_x - left_x)
     return fwhm, (left_x, right_x)
+
+def n_air(wl, T, p):
+    """
+    from modified Edlén equation https://emtoolbox.nist.gov/Wavelength/Documentation.asp#AppendixB
+    """
+    A = 8342.54
+    B = 240614
+    C = 15998
+    D = 96095.43
+    E = 0.601
+    F = 0.00972
+    G = 0.003661
+    S = 1/(wl * 1e6) # convert wavelength 
 
