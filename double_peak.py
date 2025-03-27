@@ -1,4 +1,4 @@
-from os import listdir, path
+from os import path
 
 import utilities as ut
 import constants as cst
@@ -7,9 +7,15 @@ import numpy as np
 import scipy.signal as sgl
 import matplotlib.pyplot as plt
 
-data_dir = './data/20250213_Ca-neutral_double-peak'
-fnames = [f for f in listdir(data_dir) if path.isfile(path.join(data_dir, f))]
-data = [ut.read_counts_freq(path.join(data_dir, f), freq_correction=cst.FREQ_CORRECTION) for f in fnames]
+data_dir = './data/20250319-Ca-neutral_fluo-double-beam'
+all_files = ut.get_filelist(data_dir)
+fnames = [f for f in all_files if f[-3:] == 'dat']
+do_freq_lims = cst.FREQ_LIMS in all_files
+
+freq_lims = ut.read_freq_lims(path.join(data_dir, cst.FREQ_LIMS)) if do_freq_lims else None
+freq_correction = cst.FREQ_CORRECTION if not do_freq_lims else None
+
+data = [ut.read_counts_freq(path.join(data_dir, f), freq_correction=freq_correction, freq_lims=freq_lims[f]) for f in fnames]
 N = len(fnames)
 
 # store data in usable form
@@ -50,9 +56,9 @@ for i in range(N):
     c = sgl.savgol_filter(c, window_length=int(c.size * 0.07), polyorder=3) # smooth
     # remove lower values for easier peak search
     high_values = c > threshold
-    first_high = high_values.nonzero()[0][0]
-    first_low = np.nonzero(np.logical_not(high_values[first_high:]))[0][0] + first_high
-    high_values[first_low:] = np.zeros((len(high_values)-first_low))
+    #first_high = high_values.nonzero()[0][0]
+    #first_low = np.nonzero(np.logical_not(high_values[first_high:]))[0][0] + first_high
+    #high_values[first_low:] = np.zeros((len(high_values)-first_low))
     c = c * high_values
     # find all peaks (there's a lot from the noise)
     all_peak_idx, props = sgl.find_peaks(c, height=(None, None), width=100)
@@ -81,6 +87,8 @@ print(f'absolute error: {np.abs(mean_trans_freq - cst.TRANSITION_FREQ)/Hz_scale:
 # plotting
 
 xaxis_scale = 1e-9
+theta_ol = 82.56
+theta_olp = 82.91
 
 fig, ax = plt.subplots(1,1)
 for i in range(N):
@@ -93,26 +101,19 @@ fig.legend()
 
 fig, ax = plt.subplots(1,1)
 ax.scatter(temps, peak_speeds, label='experimental data')
-#ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(52)),
-#        label='speed from oven temp,\n$\\theta = 52\\degree$')
-ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(82.6)),
-        label='speed from oven temp,\n$\\theta = 82\\degree$')
-#ax.plot(temps, ut.temp2vel(temps*0.65) * np.cos(np.deg2rad(82)),
-#        label='speed from oven temp · 0.65,\n$\\theta =  82\\degree$')
-ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(84.4)),
-        label='speed from oven temp,\n$\\theta =  84.4\\degree$')
-ax.plot(temps, ut.temp2vel(temps*0.5) * np.cos(np.deg2rad(82)),
-        label='speed from oven temp · 0.50,\n$\\theta =  82\\degree$')
-#ax.plot(temps, ut.temp2vel(temps*0.5) * np.cos(np.deg2rad(8)),
-#        label='speed from oven temp · 0.50,\n$\\theta =  82\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(theta_ol)),
+        label=f'speed from oven temp,\n$\\theta = {theta_ol}\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(theta_olp)),
+        label=f'speed from oven temp,\n$\\theta = {theta_olp}\\degree$')
 ax.set_xlabel('oven temperature (K)')
 ax.set_ylabel(r'$v_p$cos$(\theta_{OL})$ most probable speed (ms⁻¹)')
 ax.legend()
 
 fig, ax = plt.subplots(1,1)
-ax.scatter(temps, ut.vel2temp(peak_speeds / np.cos(np.deg2rad(82.6))), label='$\\theta_{OL} = 82\\degree$')
-#ax.scatter(temps, ut.vel2temp(peak_speeds / np.cos(np.deg2rad(84.4))), label='$\\theta_{OL} = 84.4\\degree$')
-#ax.scatter(temps, ut.vel2temp(peak_speeds / np.cos(np.deg2rad(52))), label='$\\theta_{OL} = 50\\degree$')
+ax.scatter(temps, ut.vel2temp(peak_speeds / np.cos(np.deg2rad(theta_ol))),
+           label=f'$\\theta = {theta_ol}\\degree$')
+ax.scatter(temps, ut.vel2temp(peak_speeds / np.cos(np.deg2rad(theta_olp))),
+           label=f'$\\theta = {theta_olp}\\degree$')
 ax.plot(temps, temps, label='oven temperature')
 ax.set_xlabel('measured oven temperature (K)')
 ax.set_ylabel(r'calculated temperature$ (K)')

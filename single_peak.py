@@ -1,4 +1,4 @@
-from os import listdir, path
+from os import path
 
 import utilities as ut
 import constants as cst
@@ -8,9 +8,21 @@ import scipy.signal as sgl
 from scipy.constants import speed_of_light
 import matplotlib.pyplot as plt
 
-data_dir = './data/20250219_Ca-neutral_trap-axis'
-fnames = [f for f in listdir(data_dir) if path.isfile(path.join(data_dir, f))]
-data = [ut.read_counts_freq(path.join(data_dir, f), freq_correction=cst.FREQ_CORRECTION) for f in fnames]
+position = 'usual'
+#position = 'trap'
+
+data_dir = './data/20250318_Ca-neutral_fluo-usual-position'
+#data_dir = './data/20250319_Ca-neutral_fluo-trap-axis'
+all_files = ut.get_filelist(data_dir)
+fnames = [f for f in all_files if f[-3:] == 'dat']
+
+position = 'trap' if 'trap' in data_dir else 'usual'
+do_freq_lims = cst.FREQ_LIMS in all_files
+
+freq_lims = ut.read_freq_lims(path.join(data_dir, cst.FREQ_LIMS)) if do_freq_lims else None
+freq_correction = cst.FREQ_CORRECTION if not do_freq_lims else None
+
+data = [ut.read_counts_freq(path.join(data_dir, f), freq_correction=freq_correction, freq_lims=freq_lims[f]) for f in fnames]
 N = len(fnames)
 
 # store data in usable form
@@ -47,7 +59,7 @@ for i in range(N):
     left_idx = props['left_ips']
     right_idx = props['right_ips']
     [left_f, right_f] = np.interp([left_idx[0], right_idx[0]], np.arange(f.size), f)
-    fwhm = right_f - left_f
+    fwhm = np.abs(right_f - left_f)
     # store
     widths[i] = fwhm
     heights[i] = c[peak_idx] * counts[i].max()
@@ -57,7 +69,6 @@ for i in range(N):
 # convert to speeds
 vp_from_width = (cst.TRANSITION_WAVELENGTH_AIR * cst.n_AIR) * widths / (2 * np.sqrt(np.log(2)))
 vp_from_peak = np.abs(peak_freq - cst.TRANSITION_FREQ) * (cst.TRANSITION_WAVELENGTH_AIR * cst.n_AIR)
-print(peak_freq - cst.TRANSITION_FREQ)
 
 # calculated temperatures
 
@@ -65,6 +76,9 @@ print(peak_freq - cst.TRANSITION_FREQ)
 
 freq_scale = 1e9
 freq_units = 'GHz'
+
+theta_ol = 75 if position == 'trap' else 82.91
+theta_olp = 76 if position == 'trap' else 81
 
 # counts
 fig, ax = plt.subplots(1,1)
@@ -78,8 +92,10 @@ ax.set_ylabel('counts / ms')
 fig, ax = plt.subplots(1,1)
 ax.set_title('from peak position')
 ax.scatter(temps, vp_from_peak, label='experimental data')
-ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(75)),
-        label='speed from oven temp,\n$\\theta = 75\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(theta_ol)),
+        label=f'speed from oven temp,\n$\\theta = {theta_ol}\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(theta_olp)),
+        label=f'speed from oven temp,\n$\\theta = {theta_olp}\\degree$')
 ax.set_xlabel('oven temperature (K)')
 ax.set_ylabel(r'$v_p$cos$(\theta_{OL})$ most probable speed (ms⁻¹)')
 ax.legend()
@@ -88,10 +104,10 @@ ax.legend()
 fig, ax = plt.subplots(1,1)
 ax.set_title('from width')
 ax.scatter(temps, vp_from_width, label='experimental data')
-ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(75)),
-        label='speed from oven temp,\n$\\theta = 75\\degree$')
-ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(79)),
-        label='speed from oven temp,\n$\\theta = 79\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(theta_ol)),
+        label=f'speed from oven temp,\n$\\theta = {theta_ol}\\degree$')
+ax.plot(temps, ut.temp2vel(temps) * np.cos(np.deg2rad(theta_olp)),
+        label=f'speed from oven temp,\n$\\theta = {theta_olp}\\degree$')
 ax.set_xlabel('oven temperature (K)')
 ax.set_ylabel(r'$v_p$cos$(\theta_{OL})$ most probable speed (ms⁻¹)')
 ax.legend()

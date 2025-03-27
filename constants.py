@@ -18,5 +18,8 @@ FREQ_CORRECTION_LOW = 0.18e9
 FREQ_CORRECTION_HIGH = -0.11e9
 FREQ_CORRECTION = [FREQ_CORRECTION_LOW, FREQ_CORRECTION_HIGH]
 
+# filenames
+FREQ_LIMS = 'freq_lims.txt'
+
 if __name__ == '__main__':
     print(cst.c / (n_AIR * TRANSITION_WAVELENGTH_AIR))

@@ -51,15 +51,27 @@ def read_raw_data(data_dir):
         'filenames': fnames,
     }
 
-def read_counts_freq(fname, freq_correction=None):
-    data = np.loadtxt(fname)
+def read_freq_lims(fname):
+    lims = {}
+    with open(fname) as f:
+        for line in f:
+            name, lower, upper = line.split()
+            lims[name] = [float(lower), float(upper)]
+    return lims
+
+def read_counts_freq(fname, freq_correction=None, freq_lims=None):
+    data = np.loadtxt(fname, encoding='latin-1')
     if len(data.shape) == 1: # some files are saved with all data in the same column :(
         data = data.reshape((-1,2))
     freq = data[:,0]
     counts = data[:,1]
-    if freq_correction:
-        lower_bound = freq[0] + freq_correction[0]
-        upper_bound = freq[-1] + freq_correction[1]
+    if freq_correction or freq_lims:
+        upper_bound, lower_bound = 0, 0 
+        if freq_correction:
+            lower_bound = freq[0] + freq_correction[0]
+            upper_bound = freq[-1] + freq_correction[1]
+        elif freq_lims:
+            lower_bound, upper_bound = freq_lims
         slope = (upper_bound - lower_bound)/(freq[-1] - freq[0])
         freq = slope*(freq - freq[0]) + lower_bound
     return counts, freq
